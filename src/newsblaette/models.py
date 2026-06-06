@@ -6,6 +6,7 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class Settings:
+    report_title: str = "每日新闻晨报"
     max_items: int = 10
     lookback_hours: int = 48
     per_source_limit: int = 8

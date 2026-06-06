@@ -18,6 +18,7 @@ def load_config(config_path: str | Path) -> tuple[Settings, list[Source]]:
 
     raw_settings = data.get("settings", {}) or {}
     settings = Settings(
+        report_title=str(raw_settings.get("report_title", "每日新闻晨报")),
         max_items=int(raw_settings.get("max_items", 10)),
         lookback_hours=int(raw_settings.get("lookback_hours", 48)),
         per_source_limit=int(raw_settings.get("per_source_limit", 8)),

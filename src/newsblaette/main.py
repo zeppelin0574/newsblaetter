@@ -56,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         brief_items,
         failures,
         output_dir=output_dir,
+        report_title=settings.report_title,
         dry_run=skip_push,
     )
 

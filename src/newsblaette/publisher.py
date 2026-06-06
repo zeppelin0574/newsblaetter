@@ -21,11 +21,12 @@ def publish_briefing(
     items: list[BriefItem],
     failures: list[SourceFailure],
     output_dir: str,
+    report_title: str,
     dry_run: bool = False,
 ) -> PublishResult:
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     now = datetime.now()
-    markdown = render_markdown(items, failures, now)
+    markdown = render_markdown(items, failures, now, report_title)
     markdown_path = Path(output_dir) / f"briefing_{now:%Y-%m-%d}.md"
     markdown_path.write_text(markdown, encoding="utf-8")
 
@@ -33,7 +34,7 @@ def publish_briefing(
     telegram_sent = False
     feishu_sent = False
     if not dry_run:
-        email_sent, email_error = _safe_send(lambda: _send_email(markdown, now))
+        email_sent, email_error = _safe_send(lambda: _send_email(markdown, now, report_title))
         telegram_sent, telegram_error = _safe_send(lambda: _send_telegram(markdown))
         feishu_sent, feishu_error = _safe_send(lambda: _send_feishu(markdown))
     else:
@@ -52,9 +53,14 @@ def publish_briefing(
     )
 
 
-def render_markdown(items: list[BriefItem], failures: list[SourceFailure], generated_at: datetime) -> str:
+def render_markdown(
+    items: list[BriefItem],
+    failures: list[SourceFailure],
+    generated_at: datetime,
+    report_title: str,
+) -> str:
     lines = [
-        f"# 每日新闻晨报 - {generated_at:%Y-%m-%d}",
+        f"# {report_title} - {generated_at:%Y-%m-%d}",
         "",
         f"生成时间：{generated_at:%Y-%m-%d %H:%M}",
         "",
@@ -84,7 +90,7 @@ def render_markdown(items: list[BriefItem], failures: list[SourceFailure], gener
     return "\n".join(lines)
 
 
-def _send_email(markdown: str, generated_at: datetime) -> bool:
+def _send_email(markdown: str, generated_at: datetime, report_title: str) -> bool:
     host = _env("SMTP_HOST")
     to_addr = _env("SMTP_TO")
     if not host or not to_addr:
@@ -97,7 +103,7 @@ def _send_email(markdown: str, generated_at: datetime) -> bool:
     use_tls = (_env("SMTP_USE_TLS") or "true").lower() in {"1", "true", "yes"}
 
     message = EmailMessage()
-    message["Subject"] = f"每日新闻晨报 - {generated_at:%Y-%m-%d}"
+    message["Subject"] = f"{report_title} - {generated_at:%Y-%m-%d}"
     message["From"] = from_addr
     message["To"] = to_addr
     message.set_content(markdown)

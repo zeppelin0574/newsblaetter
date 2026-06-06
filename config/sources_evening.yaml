@@ -1,0 +1,129 @@
+settings:
+  report_title: "【晚报】每日新闻晚报"
+  max_items: 10
+  lookback_hours: 48
+  per_source_limit: 6
+  request_timeout_seconds: 12
+  retry_count: 1
+  database_path: data/evening.sqlite3
+  output_dir: output/evening
+  user_agent: "newsblaette-mvp/0.1 (+https://example.local)"
+  category_targets:
+    德国政治动态: 3
+    自然: 2
+    人文: 2
+    教育: 3
+
+sources:
+  - name: FAZ Aktuell
+    category: 德国政治动态
+    type: rss
+    url: https://www.faz.net/rss/aktuell/
+    priority: 0.8
+
+  - name: WSJ World
+    category: 人文
+    type: rss
+    url: https://feeds.a.dj.com/rss/RSSWorldNews.xml
+    priority: 0.7
+
+  - name: AP Politics
+    category: 德国政治动态
+    type: html
+    url: https://apnews.com/hub/politics
+    link_selector: "a[href*='/article/']"
+    include_url_patterns:
+      - "/article/"
+    priority: 0.75
+
+  - name: AP Science
+    category: 自然
+    type: html
+    url: https://apnews.com/hub/science
+    link_selector: "a[href*='/article/']"
+    include_url_patterns:
+      - "/article/"
+    priority: 0.75
+
+  - name: AP Education
+    category: 教育
+    type: html
+    url: https://apnews.com/hub/education
+    link_selector: "a[href*='/article/']"
+    include_url_patterns:
+      - "/article/"
+    priority: 0.75
+
+  - name: Reuters World
+    category: 德国政治动态
+    type: html
+    url: https://www.reuters.com/world/
+    enabled: false
+    link_selector: "a[href*='/world/']"
+    include_url_patterns:
+      - "/world/"
+    priority: 0.75
+
+  - name: Reuters Sustainability
+    category: 自然
+    type: html
+    url: https://www.reuters.com/sustainability/
+    enabled: false
+    link_selector: "a[href*='/sustainability/']"
+    include_url_patterns:
+      - "/sustainability/"
+    priority: 0.75
+
+  - name: BBC World
+    category: 人文
+    type: rss
+    url: https://feeds.bbci.co.uk/news/world/rss.xml
+    priority: 0.75
+
+  - name: BBC Science and Environment
+    category: 自然
+    type: rss
+    url: https://feeds.bbci.co.uk/news/science_and_environment/rss.xml
+    priority: 0.8
+
+  - name: BBC Education
+    category: 教育
+    type: rss
+    url: https://feeds.bbci.co.uk/news/education/rss.xml
+    priority: 0.8
+
+  - name: ZDFheute Politik
+    category: 德国政治动态
+    type: html
+    url: https://www.zdfheute.de/politik
+    link_selector: "a[href$='.html']"
+    include_url_patterns:
+      - "/politik/"
+    priority: 0.85
+
+  - name: ZDFheute Wissen
+    category: 自然
+    type: html
+    url: https://www.zdfheute.de/wissen
+    link_selector: "a[href$='.html']"
+    include_url_patterns:
+      - "/wissen/"
+    priority: 0.8
+
+  - name: DW Nachrichten
+    category: 德国政治动态
+    type: rss
+    url: https://rss.dw.com/xml/rss-de-news
+    priority: 0.8
+
+  - name: DW Germany
+    category: 德国政治动态
+    type: rss
+    url: https://rss.dw.com/rdf/rss-en-ger
+    priority: 0.75
+
+  - name: DW Culture
+    category: 人文
+    type: rss
+    url: https://rss.dw.com/rdf/rss-en-cul
+    priority: 0.8

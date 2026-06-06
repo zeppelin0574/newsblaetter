@@ -1,0 +1,200 @@
+settings:
+  report_title: "【晨报】每日新闻晨报"
+  max_items: 10
+  lookback_hours: 48
+  per_source_limit: 6
+  request_timeout_seconds: 12
+  retry_count: 1
+  database_path: data/morning.sqlite3
+  output_dir: output/morning
+  user_agent: "newsblaette-mvp/0.1 (+https://example.local)"
+
+sources:
+  - name: WSJ Technology
+    category: 科技
+    type: rss
+    url: https://feeds.a.dj.com/rss/RSSWSJD.xml
+    priority: 0.9
+
+  - name: WSJ Markets
+    category: 经济
+    type: rss
+    url: https://feeds.a.dj.com/rss/RSSMarketsMain.xml
+    priority: 0.9
+
+  - name: WSJ World
+    category: 全球政治
+    type: rss
+    url: https://feeds.a.dj.com/rss/RSSWorldNews.xml
+    priority: 0.9
+
+  - name: FAZ Aktuell
+    category: 全球政治
+    type: rss
+    url: https://www.faz.net/rss/aktuell/
+    priority: 0.75
+
+  - name: AP Technology
+    category: 科技
+    type: html
+    url: https://apnews.com/hub/technology
+    link_selector: "a[href*='/article/']"
+    include_url_patterns:
+      - "/article/"
+    priority: 0.85
+
+  - name: AP Business
+    category: 经济
+    type: html
+    url: https://apnews.com/hub/business
+    link_selector: "a[href*='/article/']"
+    include_url_patterns:
+      - "/article/"
+    priority: 0.85
+
+  - name: AP World News
+    category: 全球政治
+    type: html
+    url: https://apnews.com/hub/world-news
+    link_selector: "a[href*='/article/']"
+    include_url_patterns:
+      - "/article/"
+    priority: 0.85
+
+  - name: Reuters World
+    category: 全球政治
+    type: html
+    url: https://www.reuters.com/world/
+    enabled: false
+    link_selector: "a[href*='/world/']"
+    include_url_patterns:
+      - "/world/"
+    priority: 0.9
+
+  - name: Reuters Business
+    category: 经济
+    type: html
+    url: https://www.reuters.com/business/
+    enabled: false
+    link_selector: "a[href*='/business/']"
+    include_url_patterns:
+      - "/business/"
+    priority: 0.9
+
+  - name: Reuters Technology
+    category: 科技
+    type: html
+    url: https://www.reuters.com/technology/
+    enabled: false
+    link_selector: "a[href*='/technology/']"
+    include_url_patterns:
+      - "/technology/"
+    priority: 0.9
+
+  - name: BBC World
+    category: 全球政治
+    type: rss
+    url: https://feeds.bbci.co.uk/news/world/rss.xml
+    priority: 0.85
+
+  - name: BBC Business
+    category: 经济
+    type: rss
+    url: https://feeds.bbci.co.uk/news/business/rss.xml
+    priority: 0.85
+
+  - name: BBC Technology
+    category: 科技
+    type: rss
+    url: https://feeds.bbci.co.uk/news/technology/rss.xml
+    priority: 0.85
+
+  - name: ECB Press
+    category: 经济
+    type: rss
+    url: https://www.ecb.europa.eu/rss/press.html
+    priority: 0.85
+
+  - name: Federal Reserve Press
+    category: 经济
+    type: rss
+    url: https://www.federalreserve.gov/feeds/press_all.xml
+    priority: 0.85
+
+  - name: BIS Press Releases
+    category: 经济
+    type: rss
+    url: https://www.bis.org/doclist/all_pressrels.rss
+    priority: 0.85
+
+  - name: IMF News
+    category: 经济
+    type: html
+    url: https://www.imf.org/en/News
+    link_selector: "a[href*='/en/News/']"
+    include_url_patterns:
+      - "/en/News/"
+    priority: 0.75
+
+  - name: OECD News
+    category: 经济
+    type: html
+    url: https://www.oecd.org/newsroom/
+    link_selector: "a[href*='/newsroom/']"
+    include_url_patterns:
+      - "/newsroom/"
+    priority: 0.75
+
+  - name: Handelsblatt Politik
+    category: 全球政治
+    type: rss
+    url: https://feeds.cms.handelsblatt.com/politik
+    priority: 0.8
+
+  - name: Handelsblatt Finanzen
+    category: 经济
+    type: rss
+    url: https://feeds.cms.handelsblatt.com/finanzen
+    priority: 0.8
+
+  - name: Handelsblatt Technologie
+    category: 科技
+    type: rss
+    url: https://feeds.cms.handelsblatt.com/technologie
+    priority: 0.8
+
+  - name: DW Top Stories
+    category: 全球政治
+    type: rss
+    url: https://rss.dw.com/rdf/rss-en-top
+    priority: 0.8
+
+  - name: DW Nachrichten
+    category: 全球政治
+    type: rss
+    url: https://rss.dw.com/xml/rss-de-news
+    priority: 0.8
+
+  - name: Tagesschau Ausland
+    category: 全球政治
+    type: rss
+    url: https://www.tagesschau.de/ausland/index~rss2.xml
+    priority: 0.8
+
+  - name: Tagesschau Wirtschaft
+    category: 经济
+    type: rss
+    url: https://www.tagesschau.de/wirtschaft/index~rss2.xml
+    priority: 0.8
+
+  - name: Tagesschau Technologie
+    category: 科技
+    type: rss
+    url: https://www.tagesschau.de/wissen/technologie/index~rss2.xml
+    priority: 0.75
+
+  - name: Politico Europe
+    category: 全球政治
+    type: rss
+    url: https://www.politico.eu/feed/
+    priority: 0.85
