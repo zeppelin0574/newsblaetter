@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
+from typing import Callable
 
 import httpx
 
@@ -31,15 +32,22 @@ def publish_briefing(
     telegram_sent = False
     feishu_sent = False
     if not dry_run:
-        email_sent = _send_email(markdown, now)
-        telegram_sent = _send_telegram(markdown)
-        feishu_sent = _send_feishu(markdown)
+        email_sent, email_error = _safe_send(lambda: _send_email(markdown, now))
+        telegram_sent, telegram_error = _safe_send(lambda: _send_telegram(markdown))
+        feishu_sent, feishu_error = _safe_send(lambda: _send_feishu(markdown))
+    else:
+        email_error = None
+        telegram_error = None
+        feishu_error = None
 
     return PublishResult(
         markdown_path=str(markdown_path),
         email_sent=email_sent,
         telegram_sent=telegram_sent,
         feishu_sent=feishu_sent,
+        email_error=email_error,
+        telegram_error=telegram_error,
+        feishu_error=feishu_error,
     )
 
 
@@ -105,6 +113,13 @@ def _send_email(markdown: str, generated_at: datetime) -> bool:
     return True
 
 
+def _safe_send(send_func: Callable[[], bool]) -> tuple[bool, str | None]:
+    try:
+        return send_func(), None
+    except Exception as exc:
+        return False, _short_error(exc)
+
+
 def _send_telegram(markdown: str) -> bool:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
@@ -156,3 +171,8 @@ def _feishu_sign(timestamp: str, secret: str) -> str:
     key = f"{timestamp}\n{secret}".encode("utf-8")
     digest = hmac.new(key, b"", hashlib.sha256).digest()
     return base64.b64encode(digest).decode("utf-8")
+
+
+def _short_error(exc: Exception) -> str:
+    message = str(exc).replace("\n", " ").strip()
+    return message[:240] if message else exc.__class__.__name__

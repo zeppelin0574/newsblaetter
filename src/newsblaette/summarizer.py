@@ -7,25 +7,37 @@ from textwrap import shorten
 from .models import Article, BriefItem
 
 
-def build_brief_items(articles: list[Article]) -> list[BriefItem]:
+def build_brief_items(
+    articles: list[Article],
+    use_ai: bool = True,
+    timeout_seconds: float | None = None,
+) -> tuple[list[BriefItem], bool, str | None]:
     if not articles:
-        return []
+        return [], False, None
 
     api_key = os.getenv("OPENAI_API_KEY")
-    if api_key:
+    if use_ai and api_key:
         try:
-            return _build_with_openai(articles)
-        except Exception:
-            pass
+            return _build_with_openai(articles, timeout_seconds), True, None
+        except Exception as exc:
+            return [_fallback_item(article) for article in articles], False, _short_error(exc)
 
-    return [_fallback_item(article) for article in articles]
+    if not use_ai:
+        reason = "AI disabled by --no-ai."
+    elif not api_key:
+        reason = "OPENAI_API_KEY is not configured."
+    else:
+        reason = None
+
+    return [_fallback_item(article) for article in articles], False, reason
 
 
-def _build_with_openai(articles: list[Article]) -> list[BriefItem]:
+def _build_with_openai(articles: list[Article], timeout_seconds: float | None) -> list[BriefItem]:
     from openai import OpenAI
 
     model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-    client = OpenAI()
+    timeout = timeout_seconds or float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
+    client = OpenAI(timeout=timeout)
     payload = [
         {
             "id": index,
@@ -144,3 +156,8 @@ def _one_sentence(text: str) -> str:
         if separator in text:
             return text.split(separator, 1)[0].strip() + "。"
     return text + "。"
+
+
+def _short_error(exc: Exception) -> str:
+    message = str(exc).replace("\n", " ").strip()
+    return message[:240] if message else exc.__class__.__name__

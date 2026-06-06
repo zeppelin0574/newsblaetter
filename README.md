@@ -23,6 +23,7 @@ Get-Content -Raw -Encoding UTF8 output\briefing_YYYY-MM-DD.md
 
 1. 编辑 `.env`：
    - 设置 `OPENAI_API_KEY` 后，会用 OpenAI 生成中文晨报。
+   - 可用 `OPENAI_TIMEOUT_SECONDS` 设置 OpenAI 请求超时，默认 30 秒。
    - 设置 `SMTP_*` 后，会邮件推送。
    - 设置 `TELEGRAM_BOT_TOKEN` 和 `TELEGRAM_CHAT_ID` 后，会 Telegram 推送。
    - 设置 `FEISHU_WEBHOOK_URL` 后，会飞书自定义机器人推送；如果机器人开启了签名校验，同时设置 `FEISHU_SECRET`。
@@ -40,6 +41,56 @@ Get-Content -Raw -Encoding UTF8 output\briefing_YYYY-MM-DD.md
 ```powershell
 .\.venv\Scripts\python.exe run.py --dry-run
 ```
+
+跳过 OpenAI、使用本地兜底摘要：
+
+```powershell
+.\.venv\Scripts\python.exe run.py --dry-run --no-ai
+```
+
+正式抓取和生成，但跳过所有推送通道：
+
+```powershell
+.\.venv\Scripts\python.exe run.py --no-push
+```
+
+推荐排错顺序：
+
+```powershell
+.\.venv\Scripts\python.exe run.py --sample
+.\.venv\Scripts\python.exe run.py --dry-run --no-ai
+.\.venv\Scripts\python.exe run.py --dry-run
+.\.venv\Scripts\python.exe run.py
+```
+
+运行时会输出当前阶段，例如抓取、筛选、生成摘要、推送。OpenAI、Gmail、Telegram、飞书其中一个通道失败时，会打印对应错误，并继续处理其他通道。
+
+## Gmail 推送
+
+Gmail 推荐配置：
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your.name@gmail.com
+SMTP_PASSWORD=your_16_digit_app_password
+SMTP_FROM=your.name@gmail.com
+SMTP_TO=receiver@example.com
+SMTP_USE_TLS=true
+```
+
+`SMTP_PASSWORD` 应填写 Google 应用专用密码，不要填写 Gmail 登录密码。创建应用专用密码前，需要在 Google 账号安全设置中开启两步验证。
+
+## 飞书推送
+
+飞书自定义机器人配置：
+
+```env
+FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/your-bot-id
+FEISHU_SECRET=
+```
+
+如果机器人开启了签名校验，填入 `FEISHU_SECRET`；未开启时留空。
 
 ## 每日 7:30 定时
 

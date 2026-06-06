@@ -66,3 +66,6 @@ class PublishResult:
     email_sent: bool
     telegram_sent: bool
     feishu_sent: bool
+    email_error: str | None = None
+    telegram_error: str | None = None
+    feishu_error: str | None = None

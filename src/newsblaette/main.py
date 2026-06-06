@@ -16,6 +16,7 @@ from .summarizer import build_brief_items
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    _log("Loading environment and configuration...")
     load_project_env()
 
     settings, sources = load_config(args.config)
@@ -23,29 +24,56 @@ def main(argv: list[str] | None = None) -> int:
     store = Store(settings.database_path)
 
     if args.sample:
+        _log("Using sample articles; network and push channels are skipped.")
         articles, failures = _sample_articles(), _sample_failures()
     else:
+        _log(f"Fetching sources ({len(sources)} configured)...")
         articles, failures = fetch_sources(settings, sources)
 
+    _log("Selecting articles...")
     selected = select_articles(articles, settings, store.seen_urls())
-    brief_items = build_brief_items(selected)
+    _log("Generating briefing items...")
+    brief_items, ai_used, ai_error = build_brief_items(
+        selected,
+        use_ai=not args.no_ai,
+        timeout_seconds=args.openai_timeout,
+    )
+    if ai_used:
+        _log("AI summaries generated with OpenAI.")
+    elif ai_error:
+        _log(f"Using local fallback summaries: {ai_error}")
+
+    skip_push = args.dry_run or args.sample or args.no_push
+    if skip_push:
+        _log("Writing Markdown only; push channels are skipped.")
+    else:
+        _log("Publishing to configured push channels...")
     result = publish_briefing(
         brief_items,
         failures,
         output_dir=output_dir,
-        dry_run=args.dry_run or args.sample,
+        dry_run=skip_push,
     )
 
-    if not args.dry_run and not args.sample:
+    pushed_anywhere = result.email_sent or result.telegram_sent or result.feishu_sent
+    if not skip_push and pushed_anywhere:
         store.mark_sent(selected)
+    elif not skip_push:
+        _log("No push channel succeeded; selected articles were not marked as sent.")
 
     print(f"articles fetched: {len(articles)}")
     print(f"articles selected: {len(selected)}")
     print(f"failed sources: {len(failures)}")
     print(f"markdown: {Path(result.markdown_path).resolve()}")
     print(f"email sent: {result.email_sent}")
+    if result.email_error:
+        print(f"email error: {result.email_error}")
     print(f"telegram sent: {result.telegram_sent}")
+    if result.telegram_error:
+        print(f"telegram error: {result.telegram_error}")
     print(f"feishu sent: {result.feishu_sent}")
+    if result.feishu_error:
+        print(f"feishu error: {result.feishu_error}")
     return 0
 
 
@@ -55,7 +83,19 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--output-dir", default=None, help="Override output directory.")
     parser.add_argument("--dry-run", action="store_true", help="Write Markdown but do not push or mark items sent.")
     parser.add_argument("--sample", action="store_true", help="Generate a sample briefing without network/API calls.")
+    parser.add_argument("--no-ai", action="store_true", help="Skip OpenAI and use local fallback summaries.")
+    parser.add_argument("--no-push", action="store_true", help="Write Markdown but skip email, Telegram, and Feishu.")
+    parser.add_argument(
+        "--openai-timeout",
+        type=float,
+        default=None,
+        help="OpenAI request timeout in seconds. Defaults to OPENAI_TIMEOUT_SECONDS or 30.",
+    )
     return parser.parse_args(argv)
+
+
+def _log(message: str) -> None:
+    print(f"[{datetime.now():%H:%M:%S}] {message}", flush=True)
 
 
 def _sample_articles() -> list[Article]:
