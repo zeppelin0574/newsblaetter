@@ -1,0 +1,78 @@
+settings:
+  max_items: 10
+  lookback_hours: 48
+  per_source_limit: 8
+  request_timeout_seconds: 12
+  retry_count: 1
+  database_path: data/newsblaette.sqlite3
+  output_dir: output
+  user_agent: "newsblaette-mvp/0.1 (+https://example.local)"
+  category_targets:
+    AI: 4
+    全球经济: 3
+    科技: 3
+
+sources:
+  - name: OpenAI News
+    category: AI
+    type: rss
+    url: https://openai.com/news/rss.xml
+    priority: 1.0
+
+  - name: arXiv cs.AI
+    category: AI
+    type: rss
+    url: https://export.arxiv.org/rss/cs.AI
+    priority: 0.75
+
+  - name: TechCrunch AI
+    category: AI
+    type: rss
+    url: https://techcrunch.com/category/artificial-intelligence/feed/
+    priority: 0.85
+
+  - name: BIS Press Releases
+    category: 全球经济
+    type: rss
+    url: https://www.bis.org/doclist/all_pressrels.rss
+    priority: 0.9
+
+  - name: Federal Reserve Press
+    category: 全球经济
+    type: rss
+    url: https://www.federalreserve.gov/feeds/press_all.xml
+    priority: 0.85
+
+  - name: ECB Press
+    category: 全球经济
+    type: rss
+    url: https://www.ecb.europa.eu/rss/press.html
+    priority: 0.8
+
+  - name: The Verge
+    category: 科技
+    type: rss
+    url: https://www.theverge.com/rss/index.xml
+    priority: 0.85
+
+  - name: TechCrunch
+    category: 科技
+    type: rss
+    url: https://techcrunch.com/feed/
+    priority: 0.8
+
+  - name: Ars Technica
+    category: 科技
+    type: rss
+    url: https://feeds.arstechnica.com/arstechnica/index
+    priority: 0.8
+
+  - name: Anthropic News
+    category: AI
+    type: html
+    url: https://www.anthropic.com/news
+    link_selector: "a[href*='/news/']"
+    include_url_patterns:
+      - "/news/"
+    max_items: 5
+    priority: 0.8
