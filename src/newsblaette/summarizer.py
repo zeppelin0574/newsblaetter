@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from textwrap import shorten
 
 from .models import Article, BriefItem
@@ -45,7 +46,7 @@ def _build_with_openai(articles: list[Article], timeout_seconds: float | None) -
             "category": article.category,
             "source_name": article.source_name,
             "source_url": article.url,
-            "excerpt": shorten(article.excerpt or "", width=1600, placeholder="..."),
+            "excerpt": shorten(article.excerpt or "", width=3200, placeholder="..."),
         }
         for index, article in enumerate(articles, start=1)
     ]
@@ -56,8 +57,8 @@ def _build_with_openai(articles: list[Article], timeout_seconds: float | None) -
 - 输出严格 JSON 对象，不要 Markdown，不要解释。
 - JSON 对象格式为 {{"items": [...]}}。
 - items 内每个对象包含 id、title、category、summary、comment。
-- summary 使用中文，150-200字。
-- comment 使用中文，一句话，给出影响判断或观察角度，避免夸张。
+- summary 使用中文，围绕原文信息做清楚的简单概括，字数不限，但尽量控制在300字以内。
+- comment 使用中文，一句话，给出简短观察角度，避免夸张。
 - title 可以翻译或压缩，但不要改变事实。
 - 如果材料信息不足，请在 summary 中说明“原文披露信息有限”。
 
@@ -121,12 +122,14 @@ def _loads_items(raw_text: str) -> list[dict[str, object]]:
 
 
 def _fallback_item(article: Article) -> BriefItem:
-    base = (
-        f"{article.source_name} 报道或发布了“{article.title}”。"
-        f"{article.excerpt[:520]} "
-        f"这条信息被归入{article.category}方向，当前 MVP 仅使用来源中可见的标题和摘要生成内容，"
-        "建议结合原文链接继续核验细节、发布时间和上下文。"
-    )
+    extracted = _extractive_summary(article.excerpt)
+    if extracted:
+        base = f"{extracted}"
+    else:
+        base = (
+            f"{article.source_name} 发布了“{article.title}”。"
+            "原文可抽取的信息有限，建议打开链接查看完整内容、发布时间和上下文。"
+        )
     return BriefItem(
         title=article.title,
         category=article.category,
@@ -141,11 +144,7 @@ def _fit_text(text: str, article: Article) -> str:
     text = " ".join(text.split())
     if not text:
         text = f"{article.source_name} 发布了“{article.title}”，原文披露信息有限。"
-    while len(text) < 150:
-        text += " 原文披露信息有限，后续需要结合来源链接补充事实细节和背景判断。"
-    if len(text) > 200:
-        text = text[:197].rstrip() + "..."
-    return text
+    return _trim_near_sentence_boundary(text, 300)
 
 
 def _one_sentence(text: str) -> str:
@@ -161,3 +160,80 @@ def _one_sentence(text: str) -> str:
 def _short_error(exc: Exception) -> str:
     message = str(exc).replace("\n", " ").strip()
     return message[:240] if message else exc.__class__.__name__
+
+
+def _extractive_summary(text: str) -> str:
+    text = _normalize_text(text)
+    if not text:
+        return ""
+    sentences = _split_sentences(text)
+    if not sentences:
+        return _trim_near_sentence_boundary(text, 300)
+
+    chosen: list[str] = []
+    seen: set[str] = set()
+    total = 0
+    for sentence in sentences:
+        key = _sentence_key(sentence)
+        if key in seen:
+            continue
+        if _is_low_signal_sentence(sentence):
+            continue
+        seen.add(key)
+        chosen.append(sentence)
+        total += len(sentence)
+        if total >= 260:
+            break
+
+    if not chosen:
+        chosen = sentences[:3]
+    return _trim_near_sentence_boundary(" ".join(chosen), 300)
+
+
+def _split_sentences(text: str) -> list[str]:
+    text = re.sub(r"\s+", " ", text).strip()
+    parts = re.split(r"(?<=[。！？!?])\s+|(?<=[.!?])\s+(?=[A-Z0-9\"'])", text)
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _normalize_text(text: str) -> str:
+    text = re.sub(r"\s+", " ", text or "")
+    noise_patterns = [
+        r"Sign up for .*? newsletters?",
+        r"Subscribe to .*? newsletters?",
+        r"Click here .*",
+        r"Advertisement",
+        r"Continue reading",
+    ]
+    for pattern in noise_patterns:
+        text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _is_low_signal_sentence(sentence: str) -> bool:
+    lowered = sentence.lower()
+    low_signal = (
+        "all rights reserved",
+        "cookie",
+        "privacy policy",
+        "terms of service",
+        "sign up",
+        "subscribe",
+        "advertisement",
+    )
+    return any(marker in lowered for marker in low_signal) or len(sentence) < 18
+
+
+def _sentence_key(sentence: str) -> str:
+    return re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", sentence.lower())[:120]
+
+
+def _trim_near_sentence_boundary(text: str, limit: int) -> str:
+    text = _normalize_text(text)
+    if len(text) <= limit:
+        return text
+    candidate = text[:limit].rstrip()
+    boundary = max(candidate.rfind(mark) for mark in ("。", "！", "？", ".", "!", "?"))
+    if boundary >= 120:
+        return candidate[: boundary + 1].strip()
+    return candidate.rstrip(",，;；:：") + "..."

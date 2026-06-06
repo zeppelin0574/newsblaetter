@@ -1,6 +1,6 @@
 # Newsblaette MVP
 
-每日新闻晨报 MVP：采集 AI、全球经济、科技方向的信息源，筛选 10 条，生成每条 150-200 字中文摘要和一句话评价，并记录未成功爬取的信息源地址。
+每日新闻晨报 MVP：采集 AI、全球经济、科技方向的信息源，筛选 10 条，二次抓取原文页面后生成每条尽量 300 字以内的概括，并记录未成功爬取的信息源地址。
 
 ## 快速开始
 
@@ -29,7 +29,7 @@ Get-Content -Raw -Encoding UTF8 output\briefing_YYYY-MM-DD.md
    - 设置 `FEISHU_WEBHOOK_URL` 后，会飞书自定义机器人推送；如果机器人开启了签名校验，同时设置 `FEISHU_SECRET`。
 2. 编辑 `config/sources.yaml`：
    - 调整信息源、分类、权重、每天候选数量。
-   - RSS/API 优先；HTML 源只做静态解析，抓不到会跳过并记录。
+   - RSS/API 优先；系统会对最终选中的 10 条新闻再尝试抓取原文页面，抓不到会保留 RSS 摘要并记录失败链接。
 3. 执行：
 
 ```powershell
@@ -63,7 +63,7 @@ Get-Content -Raw -Encoding UTF8 output\briefing_YYYY-MM-DD.md
 .\.venv\Scripts\python.exe run.py
 ```
 
-运行时会输出当前阶段，例如抓取、筛选、生成摘要、推送。OpenAI、Gmail、Telegram、飞书其中一个通道失败时，会打印对应错误，并继续处理其他通道。
+运行时会输出当前阶段，例如抓取、二次抓取原文、筛选、生成摘要、推送。OpenAI、Gmail、Telegram、飞书其中一个通道失败时，会打印对应错误，并继续处理其他通道。未配置 `OPENAI_API_KEY` 时，系统会使用原文抽取式兜底概括；英文来源会保留英文，不会自动翻译。
 
 ## Gmail 推送
 
@@ -90,7 +90,9 @@ FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/your-bot-id
 FEISHU_SECRET=
 ```
 
-如果机器人开启了签名校验，填入 `FEISHU_SECRET`；未开启时留空。
+`FEISHU_WEBHOOK_URL` 可以填完整 Webhook 地址，也可以只填 `/hook/` 后面的 token。如果机器人开启了签名校验，填入 `FEISHU_SECRET`；未开启时留空。`FEISHU_SECRET` 是群自定义机器人的签名密钥，不是开放平台应用的 App Secret。
+
+正式推送时，如果 `FEISHU_WEBHOOK_URL` 没有被程序读到，会输出 `feishu error`，用于区分“配置没加载”和“飞书服务端拒绝”。
 
 ## 每日 7:30 定时
 

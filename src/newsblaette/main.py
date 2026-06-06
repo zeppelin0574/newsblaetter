@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .config import load_config, load_project_env
-from .fetchers import fetch_sources
+from .fetchers import enrich_articles_with_page_text, fetch_sources
 from .models import Article, SourceFailure
 from .publisher import publish_briefing
 from .scoring import select_articles
@@ -32,6 +32,10 @@ def main(argv: list[str] | None = None) -> int:
 
     _log("Selecting articles...")
     selected = select_articles(articles, settings, store.seen_urls())
+    if not args.sample:
+        _log(f"Fetching article pages for selected items ({len(selected)})...")
+        selected, article_failures = enrich_articles_with_page_text(settings, selected)
+        failures.extend(article_failures)
     _log("Generating briefing items...")
     brief_items, ai_used, ai_error = build_brief_items(
         selected,

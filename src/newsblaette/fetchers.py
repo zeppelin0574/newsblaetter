@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
+import json
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
@@ -44,6 +45,43 @@ def fetch_sources(settings: Settings, sources: list[Source]) -> tuple[list[Artic
                 )
 
     return _dedupe_articles(articles), failures
+
+
+def enrich_articles_with_page_text(settings: Settings, articles: list[Article]) -> tuple[list[Article], list[SourceFailure]]:
+    headers = {"User-Agent": settings.user_agent}
+    enriched: list[Article] = []
+    failures: list[SourceFailure] = []
+
+    with httpx.Client(headers=headers, follow_redirects=True, timeout=settings.request_timeout_seconds) as client:
+        for article in articles:
+            try:
+                response = _request_with_retry(client, article.url, settings.retry_count)
+                soup = BeautifulSoup(response.text, "html.parser")
+                page_text = _page_excerpt(soup, limit=6000)
+                excerpt = _best_excerpt(article.excerpt, page_text)
+                enriched.append(
+                    Article(
+                        title=article.title,
+                        url=article.url,
+                        source_name=article.source_name,
+                        category=article.category,
+                        excerpt=excerpt,
+                        published_at=article.published_at,
+                        source_priority=article.source_priority,
+                    )
+                )
+            except Exception as exc:
+                enriched.append(article)
+                failures.append(
+                    SourceFailure(
+                        name=f"{article.source_name} article page",
+                        category=article.category,
+                        url=article.url,
+                        reason=_short_reason(exc),
+                    )
+                )
+
+    return enriched, failures
 
 
 def _fetch_rss(client: httpx.Client, source: Source, settings: Settings) -> list[Article]:
@@ -183,7 +221,11 @@ def _page_title(soup: BeautifulSoup) -> str:
     return _clean_text(title.get_text(" ", strip=True)) if title else ""
 
 
-def _page_excerpt(soup: BeautifulSoup) -> str:
+def _page_excerpt(soup: BeautifulSoup, limit: int = 2400) -> str:
+    structured_text = _json_ld_article_text(soup)
+    if structured_text:
+        return _clean_text(structured_text)[:limit]
+
     for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
         tag.decompose()
     container = soup.find("article") or soup.find("main") or soup.body or soup
@@ -191,7 +233,7 @@ def _page_excerpt(soup: BeautifulSoup) -> str:
     text = " ".join(p for p in paragraphs if p)
     if not text:
         text = container.get_text(" ", strip=True)
-    return _clean_text(text)[:2400]
+    return _clean_text(text)[:limit]
 
 
 def _strip_html(value: str) -> str:
@@ -206,6 +248,51 @@ def _clean_text(value: str) -> str:
     return value.strip()
 
 
+def _json_ld_article_text(soup: BeautifulSoup) -> str:
+    candidates: list[str] = []
+    for script in soup.find_all("script", type="application/ld+json"):
+        raw = script.string or script.get_text()
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        candidates.extend(_article_text_from_json_ld(data))
+    return _clean_text(" ".join(candidates))
+
+
+def _article_text_from_json_ld(data: object) -> list[str]:
+    if isinstance(data, list):
+        texts: list[str] = []
+        for item in data:
+            texts.extend(_article_text_from_json_ld(item))
+        return texts
+
+    if not isinstance(data, dict):
+        return []
+
+    texts: list[str] = []
+    graph = data.get("@graph")
+    if graph:
+        texts.extend(_article_text_from_json_ld(graph))
+
+    article_type = data.get("@type")
+    if isinstance(article_type, list):
+        type_names = {str(item).lower() for item in article_type}
+    else:
+        type_names = {str(article_type).lower()} if article_type else set()
+
+    looks_like_article = bool(type_names & {"newsarticle", "article", "blogposting", "report"})
+    if looks_like_article:
+        for key in ("articleBody", "description"):
+            value = data.get(key)
+            if isinstance(value, str):
+                texts.append(value)
+
+    return texts
+
+
 def _dedupe_articles(articles: list[Article]) -> list[Article]:
     seen: set[str] = set()
     unique: list[Article] = []
@@ -216,6 +303,14 @@ def _dedupe_articles(articles: list[Article]) -> list[Article]:
         seen.add(key)
         unique.append(article)
     return unique
+
+
+def _best_excerpt(original: str, page_text: str) -> str:
+    original = _clean_text(original or "")
+    page_text = _clean_text(page_text or "")
+    if len(page_text) > max(len(original), 280):
+        return page_text
+    return original or page_text
 
 
 def _short_reason(exc: Exception) -> str:

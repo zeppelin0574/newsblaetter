@@ -10,6 +10,7 @@ from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlparse
 
 import httpx
 
@@ -66,11 +67,8 @@ def render_markdown(items: list[BriefItem], failures: list[SourceFailure], gener
             [
                 f"## {index}. {item.title}",
                 "",
-                f"- 方向：{item.category}",
-                f"- 来源：{item.source_name}",
-                f"- 摘要：{item.summary}",
-                f"- 一句话评价：{item.comment}",
-                f"- 原文：{item.source_url}",
+                f"- 链接：{item.source_url}",
+                f"- 概括：{item.summary}",
                 "",
             ]
         )
@@ -87,16 +85,16 @@ def render_markdown(items: list[BriefItem], failures: list[SourceFailure], gener
 
 
 def _send_email(markdown: str, generated_at: datetime) -> bool:
-    host = os.getenv("SMTP_HOST")
-    to_addr = os.getenv("SMTP_TO")
+    host = _env("SMTP_HOST")
+    to_addr = _env("SMTP_TO")
     if not host or not to_addr:
         return False
 
-    port = int(os.getenv("SMTP_PORT", "587"))
-    username = os.getenv("SMTP_USERNAME")
-    password = os.getenv("SMTP_PASSWORD")
-    from_addr = os.getenv("SMTP_FROM") or username or to_addr
-    use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes"}
+    port = int(_env("SMTP_PORT") or "587")
+    username = _env("SMTP_USERNAME")
+    password = _env("SMTP_PASSWORD")
+    from_addr = _env("SMTP_FROM") or username or to_addr
+    use_tls = (_env("SMTP_USE_TLS") or "true").lower() in {"1", "true", "yes"}
 
     message = EmailMessage()
     message["Subject"] = f"每日新闻晨报 - {generated_at:%Y-%m-%d}"
@@ -121,8 +119,8 @@ def _safe_send(send_func: Callable[[], bool]) -> tuple[bool, str | None]:
 
 
 def _send_telegram(markdown: str) -> bool:
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    token = _env("TELEGRAM_BOT_TOKEN")
+    chat_id = _env("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
         return False
 
@@ -140,9 +138,12 @@ def _send_telegram(markdown: str) -> bool:
 
 
 def _send_feishu(markdown: str) -> bool:
-    webhook_url = os.getenv("FEISHU_WEBHOOK_URL")
+    webhook_url = _normalize_feishu_webhook_url(_env("FEISHU_WEBHOOK_URL"))
     if not webhook_url:
-        return False
+        raise ValueError(
+            "FEISHU_WEBHOOK_URL is not configured or was not loaded. "
+            "Put the group custom bot Webhook URL in the project .env file."
+        )
 
     text = markdown
     if len(text) > 12000:
@@ -153,7 +154,7 @@ def _send_feishu(markdown: str) -> bool:
         "content": {"text": text},
     }
 
-    secret = os.getenv("FEISHU_SECRET")
+    secret = _env("FEISHU_SECRET")
     if secret:
         timestamp = str(int(time.time()))
         payload["timestamp"] = timestamp
@@ -163,14 +164,61 @@ def _send_feishu(markdown: str) -> bool:
     response.raise_for_status()
     result = response.json()
     if result.get("code") not in (0, None):
-        raise RuntimeError(f"Feishu push failed: {result}")
+        raise RuntimeError(_feishu_error_message(result))
     return True
 
 
 def _feishu_sign(timestamp: str, secret: str) -> str:
-    key = f"{timestamp}\n{secret}".encode("utf-8")
-    digest = hmac.new(key, b"", hashlib.sha256).digest()
+    string_to_sign = f"{timestamp}\n{secret}".encode("utf-8")
+    digest = hmac.new(string_to_sign, digestmod=hashlib.sha256).digest()
     return base64.b64encode(digest).decode("utf-8")
+
+
+def _normalize_feishu_webhook_url(value: str | None) -> str | None:
+    if not value:
+        return None
+    value = value.strip().strip('"').strip("'").strip()
+    if not value:
+        return None
+    if value.startswith("http://") or value.startswith("https://"):
+        parsed = urlparse(value)
+        if "/open-apis/bot/v2/hook/" not in parsed.path:
+            raise ValueError(
+                "FEISHU_WEBHOOK_URL must be the custom bot Webhook URL, "
+                "for example https://open.feishu.cn/open-apis/bot/v2/hook/xxxx."
+            )
+        return value
+    return f"https://open.feishu.cn/open-apis/bot/v2/hook/{value}"
+
+
+def _feishu_error_message(result: dict[str, object]) -> str:
+    code = result.get("code")
+    msg = result.get("msg")
+    if code == 19001:
+        return (
+            f"Feishu push failed: {result}. "
+            "Webhook token is invalid. Paste the full Webhook URL from the group custom bot, "
+            "not the Feishu app App ID or App Secret."
+        )
+    if code == 19021:
+        return (
+            f"Feishu push failed: {result}. "
+            "Signature check failed. FEISHU_SECRET must be the group custom bot signing secret, "
+            "and the system clock must be within one hour of Feishu server time."
+        )
+    if code == 19024:
+        return (
+            f"Feishu push failed: {result}. "
+            "Keyword check failed. Add a keyword included in the pushed text, such as 每日新闻晨报."
+        )
+    return f"Feishu push failed: code={code}, msg={msg}, response={result}"
+
+
+def _env(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    return value.strip().strip('"').strip("'").strip()
 
 
 def _short_error(exc: Exception) -> str:
